@@ -9,6 +9,15 @@ import json, os , time, gzip
 import asyncio, aio_pika
 from contextlib import suppress
 
+from fe.algo import (
+    Algo,
+    RespPosUpdate,
+    RespTargetDone,
+    RespUpdateTarget,
+    SessionRespHandler,
+    ShmClient,
+    UpdateTarget,
+)
 
 from amqp.amqp_base import BaseConsumer 
 from amqp.amqp_base import BasePublisher
@@ -58,7 +67,114 @@ PORT_WEIGHTS = { 'ec_aw': {'Sect_AO': 2 ,
                }
 
 #############
+class Handler(SessionRespHandler):
+    def on_resp_pos_update(self, resp: RespPosUpdate):
+        print("on_resp_pos_update", resp.ts, resp.acct_id, resp.sid, resp.pos)
+
+    def on_resp_update_target(self, resp: RespUpdateTarget):
+        # response to update_target, ec=ErrorCode.NONE means success
+        print("on_resp_update_target", resp.ts, resp.update_id, resp.acct_id, resp.sid, resp.ec)
+
+    def on_resp_target_done(self, resp: RespTargetDone):
+        # target done
+        # pos is the final position
+        # canceled=True means the target is canceled
+        print(
+            "on_resp_target_done",
+            resp.ts,
+            resp.update_id,
+            resp.acct_id,
+            resp.sid,
+            resp.target_pos,
+            resp.pos,
+            resp.canceled,
+        )
+
+    def on_session_login(self, session_id: int):
+        print("on_session_login", session_id)
+        # logged in, can now send requests
+
+    def on_session_logout(self, session_id: int):
+        print("on_session_logout", session_id)
+        # logged out, timeout or server is down
+        # ShmClient will try to reconnect automatically
+
+    def on_session_not_logged_in_error(self, session_id: int):
+        print("on_session_not_logged_in_error", session_id)
+        # requests sent when not logged in
+        # ShmClient will try to reconnect automatically
+
 ## output    
+async def pub_pstn_tr(postions):
+# TODO: change these to your own values
+shm_dir = "tmp/shm"
+session_id = 1
+
+shm_client = ShmClient()
+handler = Handler()
+shm_client.initialize(shm_dir, session_id, handler)
+
+# Wait for login before sending any requests
+while not shm_client.logged_in:
+    shm_client.poll()
+    time.sleep(0.1)
+
+# subscribe to pos updates via on_resp_pos_update, will receive current pos snapshot first
+# when subscribed
+shm_client.sub_pos_update(385, 16410)
+# to unsubscribe, call shm_client.unsub_pos_update(385, 16410)
+
+target = UpdateTarget()
+target.update_id = int(time.time())
+target.acct_id = 385
+target.sid = 16410
+target.pos = 10
+target.algo = Algo.TWAP
+
+# execution start and end time
+target.start_ts = int(time.time() * 1e9)
+target.end_ts_soft = int(target.start_ts + 300 * 1e9)
+# Optional, if this is set, continue sending orders to get more fill after
+# soft end time if not fully filled yet.
+target.end_ts_hard = target.end_ts_soft
+
+# Set the ratio of qty sent as maker orders. Note that this affects the ratio of orders sent at
+# scheduling points and does not guarantee that, say, 80% of the volume will be maker volume.
+# E.g. if we sent one maker order of 8 qty and one taker order of 2 qty, and the taker order
+# was filled while the maker order was not, at the next update time the unfilled 8 qty would be
+# distributed according to the ratio again. The reason for this is to improve fill rate as maker
+# orders are harder to fill.
+# OPTIONAL. Default is 0 (taker only).
+target.maker_ratio = 0.5
+# maker order start / end time, outside of this time range only taker orders will be sent, optional
+target.maker_start_ts = target.start_ts
+target.maker_end_ts = target.end_ts_hard
+# taker order start / end time, optional
+target.taker_start_ts = target.start_ts
+target.taker_end_ts = target.end_ts_hard
+
+# trading volume / participation rate limit. E.g. Not to trade more than 5% of the total
+# market volume.
+# OPTIONAL. Default (0) is no limit.
+target.volume_limit = 0
+
+# Max price to buy or min price to sell. Default value (0) is nil.
+target.limit_price = 0
+# always use limit price for orders.
+target.strict_limit = False
+# taker: always use limit price.
+# maker: use limit price if it doesn't cross the opposite side.
+target.prefer_limit = False
+
+# use update_target to send new target
+shm_client.update_target(target)
+		
+
+
+
+
+
+
 async def update_db(orders, table=Table_Tasks_AO):
     # add acc name in the key
     # jobs = {order['q'][1] + '_' + order['d']['data']['request_id'] + '_' + order['d']['data']['order_action']: 
