@@ -28,6 +28,9 @@ from cap_allocate.cap_handler import CapHandler
 live_db = CVDB()
 
 #############
+# fe shared memory directory
+Shm_Dir = "tmp/shm"
+
 # load mq 
 with open('config_port.json', 'r') as f:
     config = json.load(f)
@@ -106,68 +109,66 @@ class Handler(SessionRespHandler):
 
 ## output    
 async def pub_pstn_tr(postions):
-# TODO: change these to your own values
-shm_dir = "tmp/shm"
-session_id = 1
-
-shm_client = ShmClient()
-handler = Handler()
-shm_client.initialize(shm_dir, session_id, handler)
-
-# Wait for login before sending any requests
-while not shm_client.logged_in:
-    shm_client.poll()
-    time.sleep(0.1)
-
-# subscribe to pos updates via on_resp_pos_update, will receive current pos snapshot first
-# when subscribed
-shm_client.sub_pos_update(385, 16410)
-# to unsubscribe, call shm_client.unsub_pos_update(385, 16410)
-
-target = UpdateTarget()
-target.update_id = int(time.time())
-target.acct_id = 385
-target.sid = 16410
-target.pos = 10
-target.algo = Algo.TWAP
-
-# execution start and end time
-target.start_ts = int(time.time() * 1e9)
-target.end_ts_soft = int(target.start_ts + 300 * 1e9)
-# Optional, if this is set, continue sending orders to get more fill after
-# soft end time if not fully filled yet.
-target.end_ts_hard = target.end_ts_soft
-
-# Set the ratio of qty sent as maker orders. Note that this affects the ratio of orders sent at
-# scheduling points and does not guarantee that, say, 80% of the volume will be maker volume.
-# E.g. if we sent one maker order of 8 qty and one taker order of 2 qty, and the taker order
-# was filled while the maker order was not, at the next update time the unfilled 8 qty would be
-# distributed according to the ratio again. The reason for this is to improve fill rate as maker
-# orders are harder to fill.
-# OPTIONAL. Default is 0 (taker only).
-target.maker_ratio = 0.5
-# maker order start / end time, outside of this time range only taker orders will be sent, optional
-target.maker_start_ts = target.start_ts
-target.maker_end_ts = target.end_ts_hard
-# taker order start / end time, optional
-target.taker_start_ts = target.start_ts
-target.taker_end_ts = target.end_ts_hard
-
-# trading volume / participation rate limit. E.g. Not to trade more than 5% of the total
-# market volume.
-# OPTIONAL. Default (0) is no limit.
-target.volume_limit = 0
-
-# Max price to buy or min price to sell. Default value (0) is nil.
-target.limit_price = 0
-# always use limit price for orders.
-target.strict_limit = False
-# taker: always use limit price.
-# maker: use limit price if it doesn't cross the opposite side.
-target.prefer_limit = False
-
-# use update_target to send new target
-shm_client.update_target(target)
+    # TODO: change these to your own values
+    session_id = 1
+    
+    shm_client = ShmClient()
+    handler = Handler()
+    shm_client.initialize(Shm_Dir, session_id, handler)
+    
+    # Wait for login before sending any requests
+    while not shm_client.logged_in:
+        shm_client.poll()
+        time.sleep(0.1)
+    
+    # subscribe to pos updates via on_resp_pos_update, will receive current pos snapshot first
+    shm_client.sub_pos_update(385, 16410)
+    # to unsubscribe, call shm_client.unsub_pos_update(385, 16410)
+    
+    target = UpdateTarget()
+    target.update_id = int(time.time())
+    target.acct_id = 385
+    target.sid = 16410
+    target.pos = 10
+    target.algo = Algo.TWAP
+    
+    # execution start and end time
+    target.start_ts = int(time.time() * 1e9)
+    target.end_ts_soft = int(target.start_ts + 300 * 1e9)
+    # Optional, if this is set, continue sending orders to get more fill after
+    # soft end time if not fully filled yet.
+    target.end_ts_hard = target.end_ts_soft
+    
+    # Set the ratio of qty sent as maker orders. Note that this affects the ratio of orders sent at
+    # scheduling points and does not guarantee that, say, 80% of the volume will be maker volume.
+    # E.g. if we sent one maker order of 8 qty and one taker order of 2 qty, and the taker order
+    # was filled while the maker order was not, at the next update time the unfilled 8 qty would be
+    # distributed according to the ratio again. The reason for this is to improve fill rate as maker
+    # orders are harder to fill.
+    # OPTIONAL. Default is 0 (taker only).
+    target.maker_ratio = 0.5
+    # maker order start / end time, outside of this time range only taker orders will be sent, optional
+    target.maker_start_ts = target.start_ts
+    target.maker_end_ts = target.end_ts_hard
+    # taker order start / end time, optional
+    target.taker_start_ts = target.start_ts
+    target.taker_end_ts = target.end_ts_hard
+    
+    # trading volume / participation rate limit. E.g. Not to trade more than 5% of the total
+    # market volume.
+    # OPTIONAL. Default (0) is no limit.
+    target.volume_limit = 0
+    
+    # Max price to buy or min price to sell. Default value (0) is nil.
+    target.limit_price = 0
+    # always use limit price for orders.
+    target.strict_limit = False
+    # taker: always use limit price.
+    # maker: use limit price if it doesn't cross the opposite side.
+    target.prefer_limit = False
+    
+    # use update_target to send new target
+    shm_client.update_target(target)
 		
 
 
