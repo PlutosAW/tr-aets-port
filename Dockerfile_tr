@@ -1,12 +1,12 @@
-FROM python:3.8-slim@sha256:dd46e1cb12432c17040638acb05508c35dc828db04f4f33c692d3894b7bc76cf 
+FROM python:3.12-slim
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
-build-essential gcc 
+build-essential gcc libpq-dev
 
 WORKDIR /usr/app
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --index-url https://pypi.org/simple/ --extra-index-url https://utilities-pypi.timeresearch.biz   -r requirements.txt 
 
 COPY . .
 
