@@ -1,0 +1,69 @@
+{"CONTACT": 
+    [      
+      {
+        "firstName": "admin",
+        "lastName": "Wang",
+        "email": "adamzkw@yahoo.com",
+        "phone": "+13399271740"
+      }
+    ],
+"ACC_MQINFO": {
+        "ftx_adam": { 
+                "name": "MQZK",
+                "exchange": "zkwang",
+                "queue": "exec_dev",
+                "routing_key": "exec_dev"
+            },
+        "tr_future_tr_aw": { 
+                "name": "MQZK",
+                "exchange": "test",
+                "queue": "exec_tr_aw",
+                "routing_key": "exec_tr_aw"
+            }                
+        },
+"EX_TICKER": {
+        "binance_spot": ["BTCUSDT", "ETHUSDT", "LDOUSDT", "ICPUSDT", "ALGOUSDT",
+             "API3USDT", "ATOMUSDT", "AVAXUSDT", "BNBUSDT", "NEARUSDT", 
+             "SOLUSDT", "TRXUSDT","BCHUSDT", "DYDXUSDT", "FTMUSDT", 
+             "GMXUSDT", "GRTUSDT", "RVNUSDT", "STXUSDT", "RNDRUSDT",
+             "CFXUSDT", "DOGEUSDT", "POLUSDT", "LTCUSDT", "KAVAUSDT",
+             "ADAUSDT", "LINKUSDT", "MULTIUSDT", "OPUSDT", "ORDIUSDT",
+             "YGGUSDT", "INJUSDT", "1000SATSUSDT", "ALTUSDT", 
+             "UNIUSDT", "PENDLEUSDT", "ENAUSDT"],
+        "binance_perp": ["BTCUSDT", "ETHUSDT", "LDOUSDT", "ICPUSDT", "ALGOUSDT",
+             "API3USDT", "ATOMUSDT", "AVAXUSDT", "BNBUSDT", "NEARUSDT", 
+             "SOLUSDT", "TRXUSDT","BCHUSDT", "DYDXUSDT", "FTMUSDT", 
+             "GMXUSDT", "GRTUSDT", "RVNUSDT", "STXUSDT", "RNDRUSDT",
+             "CFXUSDT", "DOGEUSDT", "POLUSDT", "LTCUSDT", "KAVAUSDT",
+             "ADAUSDT", "LINKUSDT", "MULTIUSDT", "OPUSDT", "ORDIUSDT",
+             "YGGUSDT", "INJUSDT", "1000SATSUSDT", "ALTUSDT",
+             "UNIUSDT", "PENDLEUSDT", "ENAUSDT"]  
+        },
+"TRADE_PARAMS": {
+        "tr_future": {
+                "pct_limit": 0.05,
+                "hours": 0.15,
+                "cpr": 0.15,
+                "taker": "No"
+                },             
+        "binance_spot": {
+                "pct_limit": 0.05,
+                "hours": 0.15,
+                "cpr": 0.1,
+                "taker": "No"
+                },
+        "binance_perp": {
+                "pct_limit": 0.05,
+                "hours": 0.15,
+                "cpr": 0.05,
+                "taker": "No"
+                },
+        "cb_spot": {
+                "pct_limit": 0.05,
+                "hours": 0.15,
+                "cpr": 0.05,
+                "taker": "No"
+                }
+        }
+}
+
