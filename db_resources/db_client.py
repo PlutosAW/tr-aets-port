@@ -164,12 +164,12 @@ class CVDB:
             print(ts_id)
             if select_timeseries[ts_id] is None: curr_tbl_name = self.get_most_recent_table_name(strat_id, ts_id)
             else: curr_tbl_name = strat_id + "_" + ts_id + "_" + str(select_timeseries[ts_id])
-            with self.engine.connect() as conn:
-                query = '''SELECT * FROM "{}" '''.format(curr_tbl_name), 
-                curr_df = pd.read_sql(query,
-                    con=conn, index_col='index')
-                rtrn_dict[ts_id] = curr_df
-                conn.close()
+            conn = self.engine.connect().connection
+            query = '''SELECT * FROM "{}" '''.format(curr_tbl_name), 
+            curr_df = pd.read_sql(query,
+                con=conn, index_col='index')
+            rtrn_dict[ts_id] = curr_df
+            conn.close()
 
         return rtrn_dict
 
@@ -304,9 +304,9 @@ class CVDB:
     def _req_db_cols (self, table):
         query = ''' select * from "{table_name}"  
             where false '''.format( table_name=table)
-        with self.engine.connect() as conn:
-            df = pd.read_sql_query(query, con=conn)  
-            conn.close()
+        conn = self.engine.connect().connection
+        df = pd.read_sql_query(query, con=conn)  
+        conn.close()
         return df
         
     ## revised to add update_time

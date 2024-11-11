@@ -20,14 +20,14 @@ from fe.algo import (
 )
 from alphaless.secmaster import SecMaster, SecMasterLoader
 from alphaless import Exchange, ProductType, SymbolType, Date
-loader = SecMasterLoader()
-loader.load_http("https://test-openapi-mcp.timeresearch.biz", Exchange.BINANCE)
-
-Sec_Master = SecMaster.instance
+# loader = SecMasterLoader()
+# # loader.load_http("https://test-openapi-mcp.timeresearch.biz", Exchange.BINANCE)
+# loader.load_http("https://prod-openapi-mcp.timeresearch.biz", Exchange.BINANCE)
+# Sec_Master = SecMaster.instance
 
 # fe shared memory directory
-Shm_Dir = "/home/master/tmp/shm"
-Shm_Dir = "/opt/data/ts_01/kungfu/algo_shm"
+Shm_Dir = "/home/tmp/shm"
+# Shm_Dir = "/opt/data/ts_01/kungfu/algo_shm"
 
 from amqp.amqp_base import BaseConsumer 
 from amqp.amqp_base import BasePublisher
@@ -54,19 +54,25 @@ AO_WEIGHTS = live_db.load_data(Table_AO_Weights)
 # # components
 # CASS_TICKERS = [s[4:] + 'USDT' for s in CASS_WEIGHTS]
 # AO_TICKERS = [s[4:] + 'USDT' for s in AO_WEIGHTS]
-AO_TICKERS = ['BTCUSDT']
+AO_TICKERS = ['BTCUSDT', 'ETHUSDT', 'DYDXUSDT', 'GMXUSDT',
+                'ORDIUSDT', 'PENDLEUSDT', 'ENAUSDT', 'ICPUSDT', 'BNBUSDT']
 NOT_TICKERS = ['RNDRUSDT']
+# Ticker_Sid = { ticker: Sec_Master.find_sid( exch=Exchange.BINANCE, product_type=ProductType.LINEAR_SWAP, exch_ticker=ticker)
+#                 for ticker in AO_TICKERS}
+# print (Ticker_Sid)
+# Ticker_Sid = {'BTCUSDT': 16410, 'ETHUSDT': 16411, 'DYDXUSDT': 16539, 'GMXUSDT': 101422, 'ORDIUSDT': 217108, 'PENDLEUSDT': 178812, 'ENAUSDT': 308748, 'ICPUSDT': 16520, 'BNBUSDT': 16425}
+Ticker_Sid = live_db.load_data('Ticker_Sid')
 
 ## get mq instance
 MQ = {
       'MQZK': {'pub': BasePublisher,
                'con': BaseConsumer} ,
       }
-BCON = MQ['MQZK']['con'](QUEUE = 'mf02_signal', durable=True)
+BCON = MQ['MQZK']['con'](QUEUE = 'ao03_signal', durable=True)
 
 ## load ams token and initialize caphandler
-AMS_ACC = {'ec_aw': {'platform': 'binance_perp',
-                    'account': 'Ec_Aw',
+AMS_ACC = {'tr_aw': {'platform': 'tr_future',
+                    'account': 'TR_AW',
                      'token_id': '', 
                      'base_curr': 'USDT'},            
             }
@@ -74,12 +80,12 @@ AMS_ACC = {'ec_aw': {'platform': 'binance_perp',
 Handler = CapHandler(AMS_ACC, Table_Tasks_AO, table_states = Table_States_AO)
 
 ## portfolio weights
-PORT_WEIGHTS = { 'ec_aw': {'Sect_AO': 2 ,
+PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 2 ,
                         'Cash': 0.3   },
                }
 
 #############
-class Handler(SessionRespHandler):
+class TR_Handler(SessionRespHandler):
 
     def on_resp_pos_update(self, resp: RespPosUpdate):
         print("on_resp_pos_update", resp.ts, resp.acct_id, resp.sid, resp.pos)
@@ -122,13 +128,22 @@ class Handler(SessionRespHandler):
         # ShmClient will try to reconnect automatically
 
 ## output    
+def get_sid(ticker):
+    loader = SecMasterLoader()
+    # loader.load_http("https://test-openapi-mcp.timeresearch.biz", Exchange.BINANCE)
+    loader.load_http("https://prod-openapi-mcp.timeresearch.biz", Exchange.BINANCE)
+    Sec_Master = SecMaster.instance
+    sid = Sec_Master.find_sid( exch=Exchange.BINANCE, product_type=ProductType.LINEAR_SWAP, exch_ticker=ticker)
+    return sid
+
 async def pub_pstn_tr(positions):
-    # TODO: change these to your own values
+    # process target positions
+    print ("target positons: ", positions)
+
     session_id = 1
-    
     shm_client = ShmClient()
-    handler = Handler()
-    shm_client.initialize(Shm_Dir, session_id, handler)
+    tr_handler = TR_Handler()
+    shm_client.initialize(Shm_Dir, session_id, tr_handler)
     
     # Wait for login before sending any requests
     while not shm_client.logged_in:
@@ -136,8 +151,8 @@ async def pub_pstn_tr(positions):
         time.sleep(0.1)
     
     # subscribe to pos updates via on_resp_pos_update, will receive current pos snapshot first
-    shm_client.sub_pos_update(3320, 16410)
-    # to unsubscribe, call shm_client.unsub_pos_update(385, 16410)
+    # shm_client.sub_pos_update(3320, 16410)
+    # # to unsubscribe, call shm_client.unsub_pos_update(385, 16410)
     
     target = UpdateTarget()
     target.update_id = int(time.time())
@@ -146,7 +161,9 @@ async def pub_pstn_tr(positions):
     prc_limit, time_limit = 0.05, 9 * 60 
     for ticker in positions:
         # get sid and positions
-        target.sid = Sec_Master.find_sid( exch=Exchange.BINANCE, product_type=ProductType.LINEAR_SWAP, exch_ticker=ticker)
+        sid =  Ticker_Sid[ticker]     # get_sid(ticker)
+        print (ticker, ' sid: ',  sid)
+        target.sid = sid
         # BTCUSDT 16410 , 14044 is USDT
         target.pos = positions[ticker]['quote_size']
         target.algo = Algo.TWAP
@@ -187,10 +204,43 @@ async def pub_pstn_tr(positions):
         
         # use update_target to send new target
         shm_client.update_target(target)
+        for i in range(5):
+            shm_client.poll()
+            time.sleep(0.1)
 
-    # while not handler.job_complete:
+    # while not tr_handler.job_complete:
     #     shm_client.poll()
     #     time.sleep(1)
+    # enum class FE_API ErrorCode : int32_t {
+    #     NONE = 0,
+    #     INTERNAL_ERROR = 1,
+    #     INVALID_START_TS = 3,
+    #     INVALID_END_TS = 4,
+    #     INVALID_SIDE = 5,
+    #     INVALID_QTY = 6,
+    #     INVALID_LIMIT_PRICE = 7,
+    #     INVALID_ACCOUNT = 8,
+    #     INVALID_SYMBOL = 9,
+    #     INVALID_ALGO = 10,
+    #     INVALID_END_TS_SOFT = 11,
+    #     INVALID_END_TS_HARD = 12,
+    #     EXPIRED_START_TS = 13,
+    #     EXPIRED_END_TS_HARD = 14,
+    #     INVALID_MAKER_RATIO = 15,
+    #     INVALID_MAKER_START_TS = 16,
+    #     INVALID_MAKER_END_TS = 17,
+    #     INVALID_TAKER_START_TS = 18,
+    #     INVALID_TAKER_END_TS = 19,
+    #     INVALID_VOLUME_LIMIT = 20,
+    #     DUPLICATE_ORDER_ID = 21,
+    #     INVALID_ORDER_ID = 22,
+    #     ORDER_CLOSED = 23,
+    #     EXPIRED_END_TS = 24,
+    #     TOO_MANY_ORDERS = 25,
+    #     ORDER_STALE = 26,
+    #     TIMEOUT = 100,
+    #     TRADING_PAUSED = 101,
+    #     };
 
 
 async def update_db(orders, table=Table_Tasks_AO):
@@ -302,22 +352,22 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
             orders_zk = orders_all[1]
             if len(orders_zk) > 0:
                 # receipt1 = await pub_order_zk(orders_zk)
-                print (f"signal {ticker} is sent to zk: ", receipt1)               
+                # print (f"signal {ticker} is sent to zk: ", receipt1)               
                 await update_db(orders_zk)    
 
             # place target position orders
             prc = strat_signal[ticker][0][-1][-1][-1]
             s = strat_signal[ticker][0][0]
+            a = s.split('Sys9')[1]
             st = float(strat_signal[ticker][0][1].split(":")[0])
             target_position = cap_alloc[s] * st / prc
             positions = {ticker: {
                 'quote_size': target_position,
                 'arrival_prc': prc,
                 'st': st,
-                'side': 'Buy' if alloc_current[ticker] > target_position else 'Sell',
+                'side': 'Buy' if alloc_current.get(a, 0.0) < target_position else 'Sell',
                 } }
             await pub_pstn_tr(positions)
-
 
     return
 
@@ -353,17 +403,21 @@ async def cass_job( message):
             if ticker in AO_TICKERS and model == 'Sys9' and ticker not in NOT_TICKERS:        
                 await strat_ao_p(ticker, strat_signal, accs = accs)   
         return
-    
+
+def _check_connection(loop, conn_c):
+    if conn_c.is_closed:
+        loop.run_until_complete(runJobs(
+            loop ) )
+
 async def runJobs(loop):
     # take global variable cross_exs and handler
-    
     consumer, conn_c = await BCON.setConsumer(loop)
     
     print ('ampq are loaded')        
-    # cback = functools.partial(process_message, consumer )
-                 
+    # cback = functools.partial(process_message, consumer )                 
     await consumer.consume(cass_job)
-
+    # check connection
+    loop.call_later(60, _check_connection, loop, conn_c)
 
 async def kill_tasks():
     pending = asyncio.all_tasks()
@@ -391,6 +445,6 @@ if __name__ == "__main__":
         print ('user canceled jobs')
         
     # start = time.time()  
-    # asyncio.run(process_message(the_handler))    
+    # asyncio.run(process_message(Handler))    
     # print ('process one signal takes: ', time.time() - start)
     
