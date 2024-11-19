@@ -53,9 +53,9 @@ AO_WEIGHTS = live_db.load_data(Table_AO_Weights)
 # CASS_WEIGHTS = live_db.load_data(Table_Cass_Weights)
 # # components
 # CASS_TICKERS = [s[4:] + 'USDT' for s in CASS_WEIGHTS]
-# AO_TICKERS = [s[4:] + 'USDT' for s in AO_WEIGHTS]
-AO_TICKERS = ['BTCUSDT', 'ETHUSDT', 'DYDXUSDT', 'GMXUSDT',
-                'ORDIUSDT', 'PENDLEUSDT', 'ENAUSDT', 'ICPUSDT', 'BNBUSDT']
+AO_TICKERS = [s[4:] + 'USDT' for s in AO_WEIGHTS]
+# AO_TICKERS = ['BTCUSDT', 'ETHUSDT', 'DYDXUSDT', 'GMXUSDT',
+#                 'ORDIUSDT', 'PENDLEUSDT', 'ENAUSDT', 'ICPUSDT', 'BNBUSDT']
 NOT_TICKERS = ['RNDRUSDT']
 # Ticker_Sid = { ticker: Sec_Master.find_sid( exch=Exchange.BINANCE, product_type=ProductType.LINEAR_SWAP, exch_ticker=ticker)
 #                 for ticker in AO_TICKERS}
@@ -80,9 +80,10 @@ AMS_ACC = {'tr_aw': {'platform': 'tr_future',
 Handler = CapHandler(AMS_ACC, Table_Tasks_AO, table_states = Table_States_AO)
 
 ## portfolio weights
-PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 2 ,
+PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 0.7 ,
                         'Cash': 0.3   },
                }
+Min_Notional = 100
 
 #############
 class TR_Handler(SessionRespHandler):
@@ -365,9 +366,10 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
                 'quote_size': target_position,
                 'arrival_prc': prc,
                 'st': st,
-                'side': 'Buy' if alloc_current.get(a, 0.0) < target_position else 'Sell',
+                'side': 'Buy' if alloc_current.get(a, 0.0) < cap_alloc[s] * st else 'Sell',
                 } }
-            await pub_pstn_tr(positions)
+            if abs(cap_alloc[s] * st) > Min_Notional:
+                await pub_pstn_tr(positions)
 
     return
 
