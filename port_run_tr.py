@@ -83,6 +83,7 @@ Handler = CapHandler(AMS_ACC, Table_Tasks_AO, table_states = Table_States_AO)
 PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 0.7 ,
                         'Cash': 0.3   },
                }
+Positions_Overlay = {'BTCUSDT': -10, }               
 Min_Notional = 100
 
 #############
@@ -166,8 +167,10 @@ async def pub_pstn_tr(positions):
         print (ticker, ' sid: ',  sid)
         target.sid = sid
         # BTCUSDT 16410 , 14044 is USDT
-        target.pos = positions[ticker]['quote_size']
+        pos_add = Positions_Overlay.get(ticker, 0.0)
+        target.pos = positions[ticker]['quote_size'] + pos_add
         target.algo = Algo.TWAP
+        # target.algo = Algo.INSTANT
         # execution start and end time, hard coded 9 minutes
         target.start_ts = int(time.time() * 1e9)
         target.end_ts_soft = int(target.start_ts + time_limit * 1e9)
@@ -207,7 +210,7 @@ async def pub_pstn_tr(positions):
         shm_client.update_target(target)
         for i in range(5):
             shm_client.poll()
-            time.sleep(0.1)
+            time.sleep(0.2)
 
     # while not tr_handler.job_complete:
     #     shm_client.poll()
