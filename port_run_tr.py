@@ -11,6 +11,7 @@ from contextlib import suppress
 
 from fe.algo import (
     Algo,
+    AlgoUrgency,
     RespPosUpdate,
     RespTargetDone,
     RespUpdateTarget,
@@ -83,7 +84,7 @@ Handler = CapHandler(AMS_ACC, Table_Tasks_AO, table_states = Table_States_AO)
 PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 0.7 ,
                         'Cash': 0.3   },
                }
-Positions_Overlay = {'BTCUSDT': -10, }               
+Positions_Overlay = {'BTCUSDT': -6.0, }               
 Min_Notional = 100
 
 #############
@@ -140,8 +141,6 @@ def get_sid(ticker):
 
 async def pub_pstn_tr(positions):
     # process target positions
-    print ("target positons: ", positions)
-
     session_id = 1
     shm_client = ShmClient()
     tr_handler = TR_Handler()
@@ -167,10 +166,9 @@ async def pub_pstn_tr(positions):
         print (ticker, ' sid: ',  sid)
         target.sid = sid
         # BTCUSDT 16410 , 14044 is USDT
-        pos_add = Positions_Overlay.get(ticker, 0.0)
-        target.pos = positions[ticker]['quote_size'] + pos_add
-        target.algo = Algo.TWAP
-        # target.algo = Algo.INSTANT
+        target.pos = positions[ticker]['quote_size'] 
+        # target.algo = Algo.TWAP
+        target.algo = Algo.INSTANT
         # execution start and end time, hard coded 9 minutes
         target.start_ts = int(time.time() * 1e9)
         target.end_ts_soft = int(target.start_ts + time_limit * 1e9)
@@ -205,8 +203,15 @@ async def pub_pstn_tr(positions):
         # taker: always use limit price.
         # maker: use limit price if it doesn't cross the opposite side.
         target.prefer_limit = False
+
+        # set use_urgency to True to enable urgency based maker/taker allocation,
+        # maker/taker start and end ts are ignore when this is enabled.
+        target.use_urgency = True
+        target.urgency = AlgoUrgency.LOW
         
         # use update_target to send new target
+        print ("target positons: ", {ticker: {'quote_size': target.pos, 'arrival_prc': positions[ticker]['arrival_prc'], 
+                                                'st': positions[ticker]['st'], 'side': positions[ticker]['side']}}})
         shm_client.update_target(target)
         for i in range(5):
             shm_client.poll()
@@ -349,6 +354,17 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
         if 'Sect_AO' in PORT_WEIGHTS[acc]:
             acc_weights = {k: w * PORT_WEIGHTS[acc]['Sect_AO'] for k, w in AO_WEIGHTS.items() }
             cap_alloc, alloc_current = await Handler.get_alloc(bals_acc[acc], ptns_acc[acc], weights = acc_weights )
+
+            # info of ticker state
+            prc = strat_signal[ticker][0][-1][-1][-1]
+            s = strat_signal[ticker][0][0]
+            a = s.split('Sys9')[1]
+            st = float(strat_signal[ticker][0][1].split(":")[0])
+
+            # deal overlay
+            pos_add = Positions_Overlay.get(ticker, 0.0)    # quote size overlay
+            cap_alloc[s] = cap_alloc[s] + pos_add * prc / st 
+
             # keep in records
             orders_all = await Handler.gen_orders(strat_signal, cap_alloc, alloc_current, 
                                                 bals_acc[acc], ptns_acc[acc], acc,
@@ -360,10 +376,6 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
                 await update_db(orders_zk)    
 
             # place target position orders
-            prc = strat_signal[ticker][0][-1][-1][-1]
-            s = strat_signal[ticker][0][0]
-            a = s.split('Sys9')[1]
-            st = float(strat_signal[ticker][0][1].split(":")[0])
             target_position = cap_alloc[s] * st / prc
             positions = {ticker: {
                 'quote_size': target_position,
