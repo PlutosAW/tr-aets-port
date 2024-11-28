@@ -211,7 +211,7 @@ async def pub_pstn_tr(positions):
         
         # use update_target to send new target
         print ("target positons: ", {ticker: {'quote_size': target.pos, 'arrival_prc': positions[ticker]['arrival_prc'], 
-                                                'st': positions[ticker]['st'], 'side': positions[ticker]['side']}}})
+                                                'st': positions[ticker]['st'], 'side': positions[ticker]['side']}})
         shm_client.update_target(target)
         for i in range(5):
             shm_client.poll()
@@ -360,10 +360,8 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
             s = strat_signal[ticker][0][0]
             a = s.split('Sys9')[1]
             st = float(strat_signal[ticker][0][1].split(":")[0])
-
             # deal overlay
             pos_add = Positions_Overlay.get(ticker, 0.0)    # quote size overlay
-            cap_alloc[s] = cap_alloc[s] + pos_add * prc / st 
 
             # keep in records
             orders_all = await Handler.gen_orders(strat_signal, cap_alloc, alloc_current, 
@@ -371,19 +369,21 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
                                                 table_states = Table_States_AO)
             orders_zk = orders_all[1]
             if len(orders_zk) > 0:
+                for order in orders_zk:
+                    order['d']['data']['total_size'] += pos_add
                 # receipt1 = await pub_order_zk(orders_zk)
                 # print (f"signal {ticker} is sent to zk: ", receipt1)               
                 await update_db(orders_zk)    
 
             # place target position orders
-            target_position = cap_alloc[s] * st / prc
+            target_position = cap_alloc[s] * st / prc + pos_add
             positions = {ticker: {
                 'quote_size': target_position,
                 'arrival_prc': prc,
                 'st': st,
-                'side': 'Buy' if alloc_current.get(a, 0.0) < cap_alloc[s] * st else 'Sell',
+                'side': 'Buy' if alloc_current.get(a, 0.0) < (target_position * prc) else 'Sell',
                 } }
-            if abs(cap_alloc[s] * st) > Min_Notional:
+            if abs(target_position * prc - alloc_current.get(a, 0.0)) > Min_Notional:
                 await pub_pstn_tr(positions)
 
     return
