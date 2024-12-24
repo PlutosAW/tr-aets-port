@@ -84,7 +84,7 @@ Handler = CapHandler(AMS_ACC, Table_Tasks_AO, table_states = Table_States_AO)
 PORT_WEIGHTS = { 'tr_aw': {'Sect_AO': 0.7 ,
                         'Cash': 0.3   },
                }
-Positions_Overlay = {'BTCUSDT': -6.0, }               
+Positions_Overlay = {'BTCUSDT': -5.0, 'ETHUSDT': 30}               
 Min_Notional = 100
 
 #############
@@ -314,7 +314,7 @@ async def strat_cass(ticker, strat_signal, accs = ['aq_aw']):
                 await update_db(orders_zk)                                   
     return
         
-async def strat_l1(ticker, strat_signal, accs = ['dv_aw']):
+async def strat_l1(ticker, strat_signal, accs = ['tr_aw']):
     bals_acc, ptns_acc = await Handler.get_port_info_h_db()
     for acc in accs:
         if 'Sect_L1' in PORT_WEIGHTS[acc]:
@@ -332,7 +332,7 @@ async def strat_l1(ticker, strat_signal, accs = ['dv_aw']):
                 await update_db(orders_zk)                                   
     return
         
-async def strat_ao(ticker, strat_signal, accs = ['aq_aw']):
+async def strat_ao(ticker, strat_signal, accs = ['tr_aw']):
     bals_acc, ptns_acc = await Handler.get_port_info_h_db()
     for acc in accs:
         if 'Sect_AO' in PORT_WEIGHTS[acc]:
@@ -348,7 +348,7 @@ async def strat_ao(ticker, strat_signal, accs = ['aq_aw']):
                 await update_db(orders_zk)                                   
     return
 
-async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
+async def strat_ao_p(ticker, strat_signal, accs = ['tr_aw']):
     bals_acc, ptns_acc = await Handler.get_port_info_h_db()
     for acc in accs:
         if 'Sect_AO' in PORT_WEIGHTS[acc]:
@@ -376,7 +376,7 @@ async def strat_ao_p(ticker, strat_signal, accs = ['aq_aw']):
                 await update_db(orders_zk)    
 
             # place target position orders
-            target_position = cap_alloc[s] * st / prc + pos_add
+            target_position = cap_alloc.get(s, 0.0) * st / prc + pos_add
             positions = {ticker: {
                 'quote_size': target_position,
                 'arrival_prc': prc,
