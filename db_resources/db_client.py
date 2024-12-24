@@ -265,11 +265,11 @@ class CVDB:
         # find column names
         count = 0
         try: 
-            df1 = self._req_db_cols(table)
+            columns = self._req_db_cols(table)
             print ('data loaded!')    
         except Exception as e:
             if count < 2:
-                df1 = self._req_db_cols(table)
+                columns = self._req_db_cols(table)
                 count += 1
             else:    
                 print(e)
@@ -281,13 +281,13 @@ class CVDB:
                 t = (cross, data, data_input[cross][1])
             else:
                 data = json.dumps(data_input[cross])  
-                if 'update_time' in df1.columns:
+                if 'update_time' in columns:
                     t = (cross, data, int(time.time()))
                 else:
                     t = (cross, data)
             params.append(t)
             
-        if 'update_time' in df1.columns:
+        if 'update_time' in columns:
             query = ''' INSERT INTO "{table_name}" (item, data, update_time) 
             VALUES (%s, %s, %s)
             '''.format( table_name=table)
@@ -302,12 +302,23 @@ class CVDB:
         return
     
     def _req_db_cols (self, table):
-        query = ''' select * from "{table_name}"  
-            where false '''.format( table_name=table)
-        conn = self.engine.connect().connection
-        df = pd.read_sql_query(query, con=conn)  
-        conn.close()
-        return df
+        query = ''' SELECT
+            column_name FROM information_schema.columns
+        WHERE
+            table_name = '{table_name}';
+        '''.format( table_name=table) 
+        with self.engine.connect() as conn:  
+            response = conn.execute(query)
+            resq = response.fetchall()
+            conn.close()
+        columns = [item[0] for item in resq]
+        return columns
+        # query = ''' select * from "{table_name}"  
+        #     where false '''.format( table_name=table)
+        # conn = self.engine.connect().connection
+        # df = pd.read_sql_query(query, con=conn)  
+        # conn.close()
+        # return df
         
     ## revised to add update_time
     def load_data(self, table='Ex_Historical_Data', 
@@ -323,17 +334,17 @@ class CVDB:
         # find column names
         count = 0
         try: 
-            df1 = self._req_db_cols(table)
+            columns = self._req_db_cols(table)
             print ('data loaded!')    
         except Exception as e:
             if count < 2:
-                df1 = self._req_db_cols(table)
+                columns = self._req_db_cols(table)
                 count += 1
             else:    
                 print(e)
         
         # pull data        
-        if 'update_time' in df1.columns:
+        if 'update_time' in columns:
             if not cutoff_time:
                 cutoff_time = int(time.time())
             query = ''' SELECT * FROM "{table_name}"  A
