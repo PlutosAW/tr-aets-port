@@ -250,7 +250,7 @@ class CapHandler():
         # revise to handle fraction st
         st =  float(signal[0][1].split(': ')[0])
         cap_a += cap_alloc.get(alias, 0.0) * st
-        print (st, cap_alloc[alias])
+        print (st, cap_a)
         
         delta_size = cap_a - alloc_current.get(a, 0.0)
         
